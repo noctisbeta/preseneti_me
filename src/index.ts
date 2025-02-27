@@ -1,12 +1,13 @@
-import cors from 'cors';
-import express, { Request, Response } from 'express';
-import { nanoid } from 'nanoid';
-import { open } from 'sqlite';
-import sqlite3 from 'sqlite3';
+import cors from "cors";
+import express, { Request, Response } from "express";
+import { nanoid } from "nanoid";
+import { open } from "sqlite";
+import sqlite3 from "sqlite3";
+
 
 async function main() {
   const db = await open({
-    filename: './data/urls.db',
+    filename: "./data/urls.db",
     driver: sqlite3.Database,
   });
 
@@ -23,32 +24,54 @@ async function main() {
   app.use(express.json());
   app.use(cors());
 
-  app.post('/shorten', async (req: Request, res: Response) => {
-    const { longUrl } = req.body;
-    const shortcode = nanoid(8);
 
-    try {
-      await db.run('INSERT INTO urls (shortcode, longUrl) VALUES (?, ?)', shortcode, longUrl);
-      res.json({ shortUrl: `https://preseneti.me/${shortcode}` });
-    } catch (error) {
-      console.error(error);
-      res.status(500).json({ error: 'Failed to shorten URL' });
+  app.post(
+    "/shorten",
+    async (req: Request, res: Response): Promise<void> => {
+      const { longUrl } = req.body;
+
+      const existing = await db.get(
+        "SELECT shortcode FROM urls WHERE longUrl = ?",
+        longUrl
+      );
+
+      if (existing) {
+        res.json({ shortUrl: `https://preseneti.me/${existing.shortcode}` });
+        return;
+      }
+
+      const shortcode = nanoid(8);
+
+      try {
+        await db.run(
+          "INSERT INTO urls (shortcode, longUrl) VALUES (?, ?)",
+          shortcode,
+          longUrl
+        );
+        res.json({ shortUrl: `https://preseneti.me/${shortcode}` });
+      } catch (error) {
+        console.error(error);
+        res.status(500).json({ error: "Failed to shorten URL" });
+      }
     }
-  });
+  );
 
-  app.get('/:shortcode', async (req: Request, res: Response) => {
+  app.get("/:shortcode", async (req: Request, res: Response) => {
     const { shortcode } = req.params;
 
     try {
-      const result = await db.get('SELECT longUrl FROM urls WHERE shortcode = ?', shortcode);
+      const result = await db.get(
+        "SELECT longUrl FROM urls WHERE shortcode = ?",
+        shortcode
+      );
       if (result) {
         res.redirect(result.longUrl);
       } else {
-        res.status(404).json({ error: 'URL not found' });
+        res.status(404).json({ error: "URL not found" });
       }
     } catch (error) {
       console.error(error);
-      res.status(500).json({ error: 'Failed to retrieve URL' });
+      res.status(500).json({ error: "Failed to retrieve URL" });
     }
   });
 
