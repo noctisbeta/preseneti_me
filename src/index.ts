@@ -29,7 +29,7 @@ async function main() {
 
     try {
       await db.run('INSERT INTO urls (shortcode, longUrl) VALUES (?, ?)', shortcode, longUrl);
-      res.json({ shortUrl: `${req.headers.origin}/${shortcode}` });
+      res.json({ shortUrl: `preseneti.me/${shortcode}` });
     } catch (error) {
       console.error(error);
       res.status(500).json({ error: 'Failed to shorten URL' });
