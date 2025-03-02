@@ -1,82 +1,33 @@
 import cors from "cors";
-import express, { Request, Response } from "express";
-import { nanoid } from "nanoid";
-import { open } from "sqlite";
-import sqlite3 from "sqlite3";
-
+import express from "express";
+import { UrlController } from "./controllers/url-controller.js";
+import { setupUrlRoutes } from "./routes/url-routes.js";
+import { DbService } from "./services/db-service.js";
+import { UrlService } from "./services/url-service.js";
 
 async function main() {
-  const db = await open({
-    filename: "./data/urls.db",
-    driver: sqlite3.Database,
-  });
-
-  await db.exec(`
-    CREATE TABLE IF NOT EXISTS urls (
-      shortcode TEXT PRIMARY KEY,
-      longUrl TEXT NOT NULL
-    )
-  `);
+  const db = await DbService.getInstance();
+  const urlService = new UrlService(db);
+  const urlController = new UrlController(urlService);
 
   const app = express();
   const port = 3001;
 
   app.use(express.json());
   app.use(cors());
+  app.use(setupUrlRoutes(urlController));
 
-
-  app.post(
-    "/shorten",
-    async (req: Request, res: Response): Promise<void> => {
-      const { longUrl } = req.body;
-
-      const existing = await db.get(
-        "SELECT shortcode FROM urls WHERE longUrl = ?",
-        longUrl
-      );
-
-      if (existing) {
-        res.json({ shortUrl: `https://preseneti.me/${existing.shortcode}` });
-        return;
-      }
-
-      const shortcode = nanoid(8);
-
-      try {
-        await db.run(
-          "INSERT INTO urls (shortcode, longUrl) VALUES (?, ?)",
-          shortcode,
-          longUrl
-        );
-        res.json({ shortUrl: `https://preseneti.me/${shortcode}` });
-      } catch (error) {
-        console.error(error);
-        res.status(500).json({ error: "Failed to shorten URL" });
-      }
-    }
-  );
-
-  app.get("/:shortcode", async (req: Request, res: Response) => {
-    const { shortcode } = req.params;
-
-    try {
-      const result = await db.get(
-        "SELECT longUrl FROM urls WHERE shortcode = ?",
-        shortcode
-      );
-      if (result) {
-        res.redirect(result.longUrl);
-      } else {
-        res.status(404).json({ error: "URL not found" });
-      }
-    } catch (error) {
-      console.error(error);
-      res.status(500).json({ error: "Failed to retrieve URL" });
-    }
+  const server = app.listen(port, () => {
+    console.log(`Server listening on port ${port}`);
   });
 
-  app.listen(port, () => {
-    console.log(`Server listening on port ${port}`);
+  // Graceful shutdown
+  process.on("SIGTERM", () => {
+    console.log("SIGTERM signal received: closing HTTP server");
+    server.close(() => {
+      console.log("HTTP server closed");
+      process.exit(0);
+    });
   });
 }
 
